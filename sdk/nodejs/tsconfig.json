@@ -14,8 +14,14 @@
     },
     "files": [
         "index.ts",
+        "ipvs.ts",
+        "ipvs/index.ts",
+        "ipvs/service.ts",
         "provider.ts",
         "random.ts",
+        "types/index.ts",
+        "types/input.ts",
+        "types/output.ts",
         "utilities.ts"
     ]
 }

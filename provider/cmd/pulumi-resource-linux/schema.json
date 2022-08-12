@@ -1,0 +1,228 @@
+{
+    "name": "linux",
+    "version": "0.0.1",
+    "types": {
+        "linux:index:SshConnection": {
+            "type": "object",
+            "description": "Instructions for how to connect to a remote endpoint.",
+            "properties": {
+                "user": {
+                    "type": "string",
+                    "description": "The user that we should use for the connection.",
+                    "default": "root"
+                },
+                "password": {
+                    "type": "string",
+                    "description": "The password we should use for the connection."
+                },
+                "host": {
+                    "type": "string",
+                    "description": "The address of the resource to connect to."
+                },
+                "port": {
+                    "type": "number",
+                    "description": "The port to connect to.",
+                    "default": 22
+                },
+                "privateKey": {
+                    "type": "string",
+                    "description": "The contents of an SSH key to use for the connection. This takes preference over the password if provided."
+                }
+            },
+            "required": [
+                "host"
+            ]
+        },
+        "linux:ipvs:Backend": {
+            "type": "object",
+            "description": "Real server that an associated request for service may be assigned to. The server-address is the host address of a real server, and may plus port. Host can be either a plain IP address or a hostname. Port can be either a plain port number or the service name of port. In the case of the masquerading method, the host address is usually an RFC 1918 private IP address, and the port can be different from that of the associated service. With the tunneling and direct routing methods, port must be equal to that of the service address. For normal services, the port specified in the service address will be used if port is not specified. For fwmark services, port may be omitted, in which case the destination port on the real server will be the destination port of the request sent to the virtual service.",
+            "properties": {
+                "host": {
+                    "type": "string",
+                    "description": "The host of the server-address. Host can be either a plain IP address or a hostname."
+                },
+                "port": {
+                    "type": "integer",
+                    "description": "The port of the server-address."
+                },
+                "forwarder": {
+                    "type": "string",
+                    "default": "g",
+                    "description": "forwarder is one of the 'g','i','m'\n g - gatewaying. Use gatewaying (direct routing). This is the default.\n i - ipip. Use ipip encapsulation (tunneling).\nm - masquerading. Use masquerading (network access translation, or NAT).\nNote: Regardless of the packet-forwarding mechanism specified, real servers for addresses for which there are interfaces on the local node will be use the local forwarding method, then packets for the servers will be passed to upper layer on the local node. This cannot be specified by ipvsadm, rather it set by the kernel as real servers are added or modified."
+                },
+                "weight": {
+                    "type": "integer",
+                    "description": "Weight is an integer specifying the capacity of a server relative to the others in the pool. The valid values of weight are 0 through to 65535. The default is 1. Quiescent servers are specified with a weight of zero. A quiescent server will receive no new jobs but still serve the existing jobs, for all scheduling algorithms distributed with the Linux Virtual Server. Setting a quiescent server may be useful if the server is overloaded or needs to be taken out of service for maintenance."
+                },
+                "uthreshold": {
+                    "type": "integer",
+                    "description": "uthreshold is an integer specifying the upper connection threshold of a server. The valid values of uthreshold are 0 through to 65535. The default is 0, which means the upper connection threshold is not set. If uthreshold is set with other values, no new connections will be sent to the server when the number of its connections exceeds its upper connection threshold."
+                },
+                "lthreshold": {
+                    "type": "integer",
+                    "description": "lthreshold is an integer specifying the lower connection threshold of a server. The valid values of lthreshold are 0 through to 65535. The default is 0, which means the lower connection threshold is not set. If lthreshold is set with other values, the server will receive new connections when the number of its connections drops below its lower connection threshold. If lthreshold is not set but uthreshold is set, the server will receive new connections when the number of its connections drops below three forth of its upper connection threshold."
+                }
+            },
+            "required": [
+                "host",
+                "port"
+            ]
+        }
+    },
+    "resources": {
+        "linux:index:Ipvs": {
+            "description": "IPVS is used to set up, maintain or inspect the virtual server table in the Linux kernel. The Linux Virtual Server can be used to build scalable network services based on a cluster of two or more nodes. The active node of the cluster redirects service requests to a collection of server hosts that will actually perform the services. Supported features include two protocols (TCP and UDP), three packet-forwarding methods (NAT, tunneling, and direct routing), and eight load balancing algorithms (round robin, weighted round robin, least-connection, weighted least-connection, locality-based least-connection, locality-based least-connection with replication, destination-hashing, and source-hashing).\nThe connection is established via ssh.",
+            "isComponent": true,
+            "inputProperties": {
+                "sshConnection": {
+                    "description": "The parameters with which to connect to the remote host",
+                    "$ref": "#/types/linux:index:SshConnection"
+                },
+                "provision": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Install ipvsadm and modules on target instance"
+                }
+            },
+            "requiredInputs": [
+                "sshConnection",
+                "provision"
+            ]
+        },
+        "linux:ipvs:Service": {
+            "description": "Virtual service serves requests to real servers (backends)",
+            "isComponent": true,
+            "inputProperties": {
+                "instance": {
+                    "description": "Target instance for IPVS management",
+                    "$ref": "#/resources/linux:index:Ipvs"
+                },
+                "host": {
+                    "type": "string",
+                    "description": "The host of the service-address. Host may be one of a plain IP address or a hostname."
+                },
+                "port": {
+                    "type": "integer",
+                    "description": "The port of the service-address. The Port may be omitted, in which case zero will be used. A Port of zero is only valid if the service is persistent, in which case it is a wild-card port, that is connections will be accepted to any port."
+                },
+                "type": {
+                    "type": "string",
+                    "default": "tcp",
+                    "description": "Service type, one of the tcp, udp, fwmark. Default is tcp.\n Use a firewall-mark, an integer value greater than zero, to denote a virtual service instead of an address, port and protocol (UDP or TCP). The marking of packets with a firewall-mark is configured using the -m|--mark option to iptables. It can be used to build a virtual service assoicated with the same real servers, covering multiple IP address, port and protocol tripplets. If IPv6 addresses are used, the -6 option must be used.\nUsing firewall-mark virtual services provides a convenient method of grouping together different IP addresses, ports and protocols into a single virtual service. This is useful for both simplifying configuration if a large number of virtual services are required and grouping persistence across what would otherwise be multiple virtual services."
+                },
+                "scheduler": {
+                    "type": "string",
+                    "default": "wlc",
+                    "description": "Algorithm for allocating TCP connections and UDP datagrams to real servers. Scheduling algorithms are implemented as kernel modules. Ten are shipped with the Linux Virtual Server:\nrr - Round Robin: distributes jobs equally amongst the available real servers.\nwrr - Weighted Round Robin: assigns jobs to real servers proportionally to there real servers' weight. Servers with higher weights receive new jobs first and get more jobs than servers with lower weights. Servers with equal weights get an equal distribution of new jobs.\nlc - Least-Connection: assigns more jobs to real servers with fewer active jobs.\nwlc - Weighted Least-Connection: assigns more jobs to servers with fewer jobs and relative to the real servers' weight (Ci/Wi). This is the default.\nlblc - Locality-Based Least-Connection: assigns jobs destined for the same IP address to the same server if the server is not overloaded and available; otherwise assign jobs to servers with fewer jobs, and keep it for future assignment.\nlblcr - Locality-Based Least-Connection with Replication: assigns jobs destined for the same IP address to the least-connection node in the server set for the IP address. If all the node in the server set are over loaded, it picks up a node with fewer jobs in the cluster and adds it in the sever set for the target. If the server set has not been modified for the specified time, the most loaded node is removed from the server set, in order to avoid high degree of replication.\ndh - Destination Hashing: assigns jobs to servers through looking up a statically assigned hash table by their destination IP addresses.\nsh - Source Hashing: assigns jobs to servers through looking up a statically assigned hash table by their source IP addresses.\nsed - Shortest Expected Delay: assigns an incoming job to the server with the shortest expected delay. The expected delay that the job will experience is (Ci + 1) / Ui if sent to the ith server, in which Ci is the number of jobs on the the ith server and Ui is the fixed service rate (weight) of the ith server.\nnq - Never Queue: assigns an incoming job to an idle server if there is, instead of waiting for a fast one; if all the servers are busy, it adopts the Shortest Expected Delay policy to assign the job."
+                },
+                "persistence": {
+                    "type": "integer",
+                    "description": "Specify that a virtual service is persistent. If this option is specified, multiple requests from a client are redirected to the same real server selected for the first request. Optionally, the timeout of persistent sessions may be specified given in seconds, otherwise the default of 300 seconds will be used. This option may be used in conjunction with protocols such as SSL or FTP where it is important that clients consistently connect with the same real server.\nNote: If a virtual service is to handle FTP connections then persistence must be set for the virtual service if Direct Routing or Tunnelling is used as the forwarding mechanism. If Masquerading is used in conjunction with an FTP service than persistence is not necessary, but the ip_vs_ftp kernel module must be used. This module may be manually inserted into the kernel using insmod(8)."
+                },
+                "netmask": {
+                    "type": "string",
+                    "default": "255.255.255.255",
+                    "description": "Specify the granularity with which clients are grouped for persistent virtual services. The source address of the request is masked with this netmask to direct all clients from a network to the same real server. The default is 255.255.255.255, that is, the persistence granularity is per client host. Less specific netmasks may be used to resolve problems with non-persistent cache clusters on the client side. IPv6 netmasks should be specified as a prefix length between 1 and 128. The default prefix length is 128.  "
+                },
+                "backends": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/types/linux:ipvs:Backend"
+                    }
+                }
+            },
+            "requiredInputs": [
+                "instance",
+                "host",
+                "port",
+                "type",
+                "scheduler",
+                "netmask",
+                "backends"
+            ],
+            "properties": {
+                "host": {
+                    "type": "string",
+                    "description": "The host of the service-address. Host may be one of a plain IP address or a hostname."
+                },
+                "port": {
+                    "type": "integer",
+                    "description": "The port of the service-address."
+                },
+                "type": {
+                    "type": "string",
+                    "description": "Service type, one of the tcp, udp, fwmark"
+                },
+                "scheduler": {
+                    "type": "string",
+                    "description": "Algorithm for allocating TCP connections and UDP datagrams to real servers.\nrr - Round Robin: distributes jobs equally amongst the available real servers.\nwrr - Weighted Round Robin: assigns jobs to real servers proportionally to there real servers' weight. Servers with higher weights receive new jobs first and get more jobs than servers with lower weights. Servers with equal weights get an equal distribution of new jobs.\nlc - Least-Connection: assigns more jobs to real servers with fewer active jobs.\nwlc - Weighted Least-Connection: assigns more jobs to servers with fewer jobs and relative to the real servers' weight (Ci/Wi). This is the default.\nlblc - Locality-Based Least-Connection: assigns jobs destined for the same IP address to the same server if the server is not overloaded and available; otherwise assign jobs to servers with fewer jobs, and keep it for future assignment.\nlblcr - Locality-Based Least-Connection with Replication: assigns jobs destined for the same IP address to the least-connection node in the server set for the IP address. If all the node in the server set are over loaded, it picks up a node with fewer jobs in the cluster and adds it in the sever set for the target. If the server set has not been modified for the specified time, the most loaded node is removed from the server set, in order to avoid high degree of replication.\ndh - Destination Hashing: assigns jobs to servers through looking up a statically assigned hash table by their destination IP addresses.\nsh - Source Hashing: assigns jobs to servers through looking up a statically assigned hash table by their source IP addresses.\nsed - Shortest Expected Delay: assigns an incoming job to the server with the shortest expected delay. The expected delay that the job will experience is (Ci + 1) / Ui if sent to the ith server, in which Ci is the number of jobs on the the ith server and Ui is the fixed service rate (weight) of the ith server.\nnq - Never Queue: assigns an incoming job to an idle server if there is, instead of waiting for a fast one; if all the servers are busy, it adopts the Shortest Expected Delay policy to assign the job."
+                },
+                "persistence": {
+                    "type": "integer",
+                    "description": "Virtual service persistence timeout in seconds. Multiple requests from a client are redirected to the same real server selected for the first request."
+                },
+                "netmask": {
+                    "type": "string",
+                    "description": "Granularity with which clients are grouped for persistent virtual services. The source address of the request is masked with this netmask to direct all clients from a network to the same real server."
+                },
+                "backends": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/types/linux:ipvs:Backend"
+                    }
+                }
+            },
+            "required": [
+                "host",
+                "port",
+                "type",
+                "scheduler",
+                "netmask",
+                "backends"
+            ]
+        },
+        "linux:index:Random": {
+            "properties": {
+                "length": {
+                    "type": "integer"
+                },
+                "result": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "length",
+                "result"
+            ],
+            "inputProperties": {
+                "length": {
+                    "type": "integer"
+                }
+            },
+            "requiredInputs": [
+                "length"
+            ]
+        }
+    },
+    "language": {
+        "csharp": {
+            "packageReferences": {
+                "Pulumi": "3.*"
+            }
+        },
+        "go": {
+            "generateResourceContainerTypes": true,
+            "importBasePath": "github.com/ikozinov/pulumi-linux/sdk/go/linux"
+        },
+        "nodejs": {
+            "dependencies": {
+                "@pulumi/pulumi": "^3.0.0"
+            }
+        },
+        "python": {
+            "requires": {
+                "pulumi": ">=3.0.0,<4.0.0"
+            }
+        }
+    }
+}
